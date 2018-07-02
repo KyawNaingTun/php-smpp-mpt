@@ -1,28 +1,5 @@
 <?php
 require_once dirname(__FILE__).DIRECTORY_SEPARATOR.'sockettransportmpt.class.php';
-	
-/**
- * Class for receiving or sending sms through SMPPMPT protocol.
- * This is a reduced implementation of the SMPPMPT protocol, and as such not all features will or ought to be available.
- * The purpose is to create a lightweight and simplified SMPPMPT client.
- * 
- * @author hd@onlinecity.dk, paladin
- * @see http://en.wikipedia.org/wiki/Short_message_peer-to-peer_protocol - SMPPMPT 3.4 protocol specification
- * Derived from work done by paladin, see: http://sourceforge.net/projects/phpsmppapi/
- * 
- * Copyright (C) 2011 OnlineCity
- * Copyright (C) 2006 Paladin 
- * 
- * This library is free software; you can redistribute it and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software Foundation; either 
- * version 2.1 of the License, or (at your option) any later version.
- * 
- * This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
- * See the GNU Lesser General Public License for more details.
- * 
- * This license can be read at: http://www.opensource.org/licenses/lgpl-2.1.php
- */
 class SmppClientMPT
 {
 	// SMPPMPT bind parameters

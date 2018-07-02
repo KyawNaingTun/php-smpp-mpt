@@ -1,15 +1,4 @@
 <?php
-
-/**
- * TCP Socket Transport for use with multiple protocols.
- * Supports connection pools and IPv6 in addition to providing a few public methods to make life easier.
- * It's primary purpose is long running connections, since it don't support socket re-use, ip-blacklisting, etc.
- * It assumes a blocking/synchronous architecture, and will block when reading or writing, but will enforce timeouts.
- * 
- * Copyright (C) 2011 OnlineCity
- * Licensed under the MIT license, which can be read at: http://www.opensource.org/licenses/mit-license.php
- * @author hd@onlinecity.dk
- */
 class SocketTransportMPT
 {
 	protected $socket;
