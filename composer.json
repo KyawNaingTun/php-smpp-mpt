@@ -4,7 +4,7 @@
   "keywords": ["smpp", "sms", "texting", "gsm", "MPT", "Myanmar"],
   "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt",
   "type": "library",
-  "license": "LGPL",
+  "license": "MIT",
   "authors": [
     {
       "name": "Kyaw Naing Tun",
