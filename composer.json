@@ -1,5 +1,5 @@
 {
-  "name": "php-smpp/php-smpp-for-mpt",
+  "name": "kyawnaingtun/php-smpp-for-mpt",
   "description": "PHP-based SMPP client lib for MPT",
   "keywords": ["smpp", "sms", "texting", "gsm", "MPT", "Myanmar"],
   "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt",
