@@ -10,7 +10,7 @@
  * Licensed under the MIT license, which can be read at: http://www.opensource.org/licenses/mit-license.php
  * @author hd@onlinecity.dk
  */
-class SocketTransport
+class SocketTransportMPT
 {
 	protected $socket;
 	protected $hosts;
@@ -179,8 +179,8 @@ class SocketTransport
 	/**
 	 * Check if the socket is constructed, and there are no exceptions on it
 	 * Returns false if it's closed.
-	 * Throws SocketTransportException is state could not be ascertained
-	 * @throws SocketTransportException
+	 * Throws SocketTransportExceptionMPT is state could not be ascertained
+	 * @throws SocketTransportExceptionMPT
 	 */
 	public function isOpen()
 	{
@@ -189,7 +189,7 @@ class SocketTransport
 		$w = null;
 		$e = array($this->socket);
 		$res = socket_select($r,$w,$e,0);
-		if ($res === false) throw new SocketTransportException('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
+		if ($res === false) throw new SocketTransportExceptionMPT('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
 		if (!empty($e)) return false; // if there is an exception on our socket it's probably dead
 		return true;
 	}
@@ -208,21 +208,21 @@ class SocketTransport
 	/**
 	 * Open the socket, trying to connect to each host in succession.
 	 * This will prefer IPv6 connections if forceIpv4 is not enabled.
-	 * If all hosts fail, a SocketTransportException is thrown.
+	 * If all hosts fail, a SocketTransportExceptionMPT is thrown.
 	 * 
-	 * @throws SocketTransportException
+	 * @throws SocketTransportExceptionMPT
 	 */
 	public function open()
 	{
 		if (!self::$forceIpv4) {
 			$socket6 = @socket_create(AF_INET6,SOCK_STREAM,SOL_TCP);
-			if ($socket6 == false) throw new SocketTransportException('Could not create socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if ($socket6 == false) throw new SocketTransportExceptionMPT('Could not create socket; '.socket_strerror(socket_last_error()), socket_last_error());
 			socket_set_option($socket6,SOL_SOCKET,SO_SNDTIMEO,$this->millisecToSolArray(self::$defaultSendTimeout));
 			socket_set_option($socket6,SOL_SOCKET,SO_RCVTIMEO,$this->millisecToSolArray(self::$defaultRecvTimeout));
 		}
 		if (!self::$forceIpv6) {
 			$socket4 = @socket_create(AF_INET,SOCK_STREAM,SOL_TCP);
-			if ($socket4 == false) throw new SocketTransportException('Could not create socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if ($socket4 == false) throw new SocketTransportExceptionMPT('Could not create socket; '.socket_strerror(socket_last_error()), socket_last_error());
 			socket_set_option($socket4,SOL_SOCKET,SO_SNDTIMEO,$this->millisecToSolArray(self::$defaultSendTimeout));
 			socket_set_option($socket4,SOL_SOCKET,SO_RCVTIMEO,$this->millisecToSolArray(self::$defaultRecvTimeout));
 		}
@@ -252,14 +252,28 @@ class SocketTransport
 						@socket_close($socket6);
 						$this->socket = $socket4;
 						return;
-					} elseif ($this->debug) {
+					}
+					elseif (socket_last_error() == 115) {
+						echo "Waiting non-blocking socket" . PHP_EOL;
+						@socket_close($socket6);
+						$this->socket = $socket4;
+						$writeTimeout = socket_get_option($this->socket,SOL_SOCKET,SO_SNDTIMEO);
+						$r = null;
+			                        $w = array($this->socket);
+                        			$e = array($this->socket);
+						echo $writeTimeout['sec'] . " " . $writeTimeout['usec'] . PHP_EOL;
+			                        $res = socket_select($r,$w,$e,$writeTimeout['sec'] + 10000, $writeTimeout['usec']);
+						echo "Socket select done - " . $res . PHP_EOL;
+						return;
+					}
+				 	elseif ($this->debug) {
 						call_user_func($this->debugHandler, "Socket connect to $ip:$port failed; ".socket_strerror(socket_last_error()));
 					}
 				}
 			}
 			$it->next();
 		}
-		throw new SocketTransportException('Could not connect to any of the specified hosts');
+		throw new SocketTransportExceptionMPT('Could not connect to any of the specified hosts');
 	}
 
 	/**
@@ -278,7 +292,7 @@ class SocketTransport
 	/**
 	 * Check if there is data waiting for us on the wire
 	 * @return boolean
-	 * @throws SocketTransportException
+	 * @throws SocketTransportExceptionMPT
 	 */
 	public function hasData()
 	{
@@ -286,7 +300,7 @@ class SocketTransport
 		$w = null;
 		$e = null;
 		$res = socket_select($r,$w,$e,0);
-		if ($res === false) throw new SocketTransportException('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
+		if ($res === false) throw new SocketTransportExceptionMPT('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
 		if (!empty($r)) return true;
 		return false; 
 	}
@@ -296,24 +310,24 @@ class SocketTransport
 	 * Does not guarantee that all the bytes are read.
 	 * Returns false on EOF
 	 * Returns false on timeout (technically EAGAIN error).
-	 * Throws SocketTransportException if data could not be read.
+	 * Throws SocketTransportExceptionMPT if data could not be read.
 	 *
 	 * @param integer $length
 	 * @return mixed
-	 * @throws SocketTransportException
+	 * @throws SocketTransportExceptionMPT
 	 */
 	public function read($length)
 	{
 		$d = socket_read($this->socket,$length,PHP_BINARY_READ);
 		if ($d === false && socket_last_error() === SOCKET_EAGAIN) return false; // sockets give EAGAIN on timeout
-		if ($d === false) throw new SocketTransportException('Could not read '.$length.' bytes from socket; '.socket_strerror(socket_last_error()), socket_last_error());
+		if ($d === false) throw new SocketTransportExceptionMPT('Could not read '.$length.' bytes from socket; '.socket_strerror(socket_last_error()), socket_last_error());
 		if ($d === '') return false;
 		return $d;
 	}
 
 	/**
 	 * Read all the bytes, and block until they are read.
-	 * Timeout throws SocketTransportException
+	 * Timeout throws SocketTransportExceptionMPT
 	 * 
 	 * @param integer $length
 	 */
@@ -325,7 +339,7 @@ class SocketTransport
 		while ($r < $length) {
 			$buf = '';
 			$r += socket_recv($this->socket,$buf,$length-$r,MSG_DONTWAIT);
-			if ($r === false) throw new SocketTransportException('Could not read '.$length.' bytes from socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if ($r === false) throw new SocketTransportExceptionMPT('Could not read '.$length.' bytes from socket; '.socket_strerror(socket_last_error()), socket_last_error());
 			$d .= $buf;
 			if ($r == $length) return $d;
 			
@@ -336,15 +350,15 @@ class SocketTransport
 			$res = socket_select($r,$w,$e,$readTimeout['sec'],$readTimeout['usec']);
 			
 			// check
-			if ($res === false) throw new SocketTransportException('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
-			if (!empty($e)) throw new SocketTransportException('Socket exception while waiting for data; '.socket_strerror(socket_last_error()), socket_last_error());
-			if (empty($r)) throw new SocketTransportException('Timed out waiting for data on socket');
+			if ($res === false) throw new SocketTransportExceptionMPT('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if (!empty($e)) throw new SocketTransportExceptionMPT('Socket exception while waiting for data; '.socket_strerror(socket_last_error()), socket_last_error());
+			if (empty($r)) throw new SocketTransportExceptionMPT('Timed out waiting for data on socket');
 		}
 	}
 
 	/**
 	 * Write (all) data to the socket.
-	 * Timeout throws SocketTransportException
+	 * Timeout throws SocketTransportExceptionMPT
 	 *  
 	 * @param integer $length
 	 */
@@ -355,7 +369,7 @@ class SocketTransport
 		
 		while ($r>0) {
 			$wrote = socket_write($this->socket,$buffer,$r);
-			if ($wrote === false) throw new SocketTransportException('Could not write '.$length.' bytes to socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if ($wrote === false) throw new SocketTransportExceptionMPT('Could not write '.$length.' bytes to socket; '.socket_strerror(socket_last_error()), socket_last_error());
 			$r -= $wrote;
 			if ($r == 0) return;
 			
@@ -368,11 +382,11 @@ class SocketTransport
 			$res = socket_select($r,$w,$e,$writeTimeout['sec'],$writeTimeout['usec']);
 				
 			// check
-			if ($res === false) throw new SocketTransportException('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
-			if (!empty($e)) throw new SocketTransportException('Socket exception while waiting to write data; '.socket_strerror(socket_last_error()), socket_last_error());
-			if (empty($w)) throw new SocketTransportException('Timed out waiting to write data on socket');
+			if ($res === false) throw new SocketTransportExceptionMPT('Could not examine socket; '.socket_strerror(socket_last_error()), socket_last_error());
+			if (!empty($e)) throw new SocketTransportExceptionMPT('Socket exception while waiting to write data; '.socket_strerror(socket_last_error()), socket_last_error());
+			if (empty($w)) throw new SocketTransportExceptionMPT('Timed out waiting to write data on socket');
 		}
 	}
 }
 
-class SocketTransportException extends RuntimeException { }
+class SocketTransportExceptionMPT extends RuntimeException { }

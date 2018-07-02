@@ -1,13 +1,13 @@
 <?php
-require_once dirname(__FILE__).DIRECTORY_SEPARATOR.'sockettransport.class.php';
+require_once dirname(__FILE__).DIRECTORY_SEPARATOR.'sockettransportmpt.class.php';
 	
 /**
- * Class for receiving or sending sms through SMPP protocol.
- * This is a reduced implementation of the SMPP protocol, and as such not all features will or ought to be available.
- * The purpose is to create a lightweight and simplified SMPP client.
+ * Class for receiving or sending sms through SMPPMPT protocol.
+ * This is a reduced implementation of the SMPPMPT protocol, and as such not all features will or ought to be available.
+ * The purpose is to create a lightweight and simplified SMPPMPT client.
  * 
  * @author hd@onlinecity.dk, paladin
- * @see http://en.wikipedia.org/wiki/Short_message_peer-to-peer_protocol - SMPP 3.4 protocol specification
+ * @see http://en.wikipedia.org/wiki/Short_message_peer-to-peer_protocol - SMPPMPT 3.4 protocol specification
  * Derived from work done by paladin, see: http://sourceforge.net/projects/phpsmppapi/
  * 
  * Copyright (C) 2011 OnlineCity
@@ -23,9 +23,9 @@ require_once dirname(__FILE__).DIRECTORY_SEPARATOR.'sockettransport.class.php';
  * 
  * This license can be read at: http://www.opensource.org/licenses/lgpl-2.1.php
  */
-class SmppClient
+class SmppClientMPT
 {
-	// SMPP bind parameters
+	// SMPPMPT bind parameters
 	public static $system_type="WWW";
 	public static $interface_version=0x34;
 	public static $addr_ton=0;
@@ -42,7 +42,7 @@ class SmppClient
 	public static $sms_sm_default_msg_id=0x00;
 	
 	/**
-	 * SMPP v3.4 says octect string are "not necessarily NULL terminated".
+	 * SMPPMPT v3.4 says octect string are "not necessarily NULL terminated".
 	 * Switch to toggle this feature
 	 * @var boolean
 	 */
@@ -66,7 +66,7 @@ class SmppClient
 	 */
 	const CSMS_8BIT_UDH = 2;
 	
-	public static $csms_method = SmppClient::CSMS_16BIT_TAGS;
+	public static $csms_method = SmppClientMPT::CSMS_16BIT_TAGS;
 	
 	public $debug;
 	
@@ -84,12 +84,12 @@ class SmppClient
 	protected $sar_msg_ref_num;
 
 	/**
-	 * Construct the SMPP class
+	 * Construct the SMPPMPT class
 	 * 
-	 * @param SocketTransport $transport
+	 * @param SocketTransportMPT $transport
 	 * @param string $debugHandler
 	 */
-	public function __construct(SocketTransport $transport,$debugHandler=null)
+	public function __construct(SocketTransportMPT $transport,$debugHandler=null)
 	{
 		// Internal parameters
 		$this->sequence_number=1;
@@ -105,14 +105,14 @@ class SmppClient
 	 * Binds the receiver. One object can be bound only as receiver or only as trancmitter.
 	 * @param string $login - ESME system_id
 	 * @param string $pass - ESME password
-	 * @throws SmppException
+	 * @throws SmppExceptionMPT
 	 */
 	public function bindReceiver($login, $pass)
 	{
 		if (!$this->transport->isOpen()) return false;
 		if($this->debug) call_user_func($this->debugHandler, 'Binding receiver...');
 		 
-		$response = $this->_bind($login, $pass, SMPP::BIND_RECEIVER);
+		$response = $this->_bind($login, $pass, SMPPMPT::BIND_RECEIVER);
 		
 		if($this->debug) call_user_func($this->debugHandler, "Binding status  : ".$response->status);
 		$this->mode = 'receiver';
@@ -124,20 +124,44 @@ class SmppClient
 	 * Binds the transmitter. One object can be bound only as receiver or only as trancmitter.
 	 * @param string $login - ESME system_id
 	 * @param string $pass - ESME password
-	 * @throws SmppException
+	 * @throws SmppExceptionMPT
 	 */
 	public function bindTransmitter($login, $pass)
 	{
 		if (!$this->transport->isOpen()) return false;
 		if($this->debug) call_user_func($this->debugHandler, 'Binding transmitter...');
 		
-		$response = $this->_bind($login, $pass, SMPP::BIND_TRANSMITTER);
+		$response = $this->_bind($login, $pass, SMPPMPT::BIND_TRANSMITTER);
 		
 		if($this->debug) call_user_func($this->debugHandler, "Binding status  : ".$response->status);
 		$this->mode = 'transmitter';
 		$this->login = $login;
 		$this->pass = $pass;
 	}
+
+	// Added by Lwin on 25 June 2018
+	/**
+	 * Binds the transceiver. One object can be bound as both transmitter and receiver in one connection.
+	 * @param string $login - ESME system_id
+	 * @param string $pass - ESME password
+	 * @throws SmppExceptionMPT
+	 */
+	/*
+	public function bindTransceiver($login, $pass)
+        {
+                if (!$this->transport->isOpen()) return false;
+                if($this->debug) call_user_func($this->debugHandler, 'Binding transceiver...');
+
+                $response = $this->_bind($login, $pass, SMPPMPT::BIND_TRANSCEIVER);
+
+                if($this->debug) call_user_func($this->debugHandler, "Binding status  : ".$response->status);
+                $this->mode = 'transceiver';
+                $this->login = $login;
+                $this->pass = $pass;
+		return true;
+        }
+	*/
+	// End addition
 	
 	/**
 	 * Closes the session on the SMSC server.
@@ -147,14 +171,14 @@ class SmppClient
 		if (!$this->transport->isOpen()) return;
 		if($this->debug) call_user_func($this->debugHandler, 'Unbinding...');
 		
-		$response=$this->sendCommand(SMPP::UNBIND,"");
+		$response=$this->sendCommand(SMPPMPT::UNBIND,"");
 		
 		if($this->debug) call_user_func($this->debugHandler, "Unbind status   : ".$response->status);
 		$this->transport->close();
 	}
 	
 	/**
-	 * Parse a timestring as formatted by SMPP v3.4 section 7.1.
+	 * Parse a timestring as formatted by SMPPMPT v3.4 section 7.1.
 	 * Returns an unix timestamp if $newDates is false or DateTime/DateInterval is missing,
 	 * otherwise an object of either DateTime or DateInterval is returned.
 	 * 
@@ -202,18 +226,18 @@ class SmppClient
 	 * Query the SMSC about current state/status of a previous sent SMS.
 	 * You must specify the SMSC assigned message id and source of the sent SMS.
 	 * Returns an associative array with elements: message_id, final_date, message_state and error_code.
-	 * 	message_state would be one of the SMPP::STATE_* constants. (SMPP v3.4 section 5.2.28)
+	 * 	message_state would be one of the SMPPMPT::STATE_* constants. (SMPPMPT v3.4 section 5.2.28)
 	 * 	error_code depends on the telco network, so could be anything.
 	 * 
 	 * @param string $messageid
-	 * @param SmppAddress $source
+	 * @param SmppAddressMPT $source
 	 * @return array
 	 */
-	public function queryStatus($messageid,SmppAddress $source)
+	public function queryStatus($messageid,SmppAddressMPT $source)
 	{
 		$pduBody = pack('a'.(strlen($messageid)+1).'cca'.(strlen($source->value)+1),$messageid,$source->ton,$source->npi,$source->value);
-		$reply = $this->sendCommand(SMPP::QUERY_SM, $pduBody);
-		if (!$reply || $reply->status != SMPP::ESME_ROK) return null;
+		$reply = $this->sendCommand(SMPPMPT::QUERY_SM, $pduBody);
+		if (!$reply || $reply->status != SMPPMPT::ESME_ROK) return null;
 		
 		// Parse reply
 		$posId = strpos($reply->body,"\0",0);
@@ -233,7 +257,7 @@ class SmppClient
 	 */
 	public function readSMS()
 	{
-		$command_id=SMPP::DELIVER_SM;
+		$command_id=SMPPMPT::DELIVER_SM;
 		// Check the queue
 		$ql = count($this->pdu_queue);
 		for($i=0;$i<$ql;$i++) {
@@ -249,8 +273,8 @@ class SmppClient
 			$pdu = $this->readPDU();
 			if ($pdu === false) return false; // TSocket v. 0.6.0+ returns false on timeout
 			//check for enquire link command
-			if($pdu->id==SMPP::ENQUIRE_LINK) {
-				$response = new SmppPdu(SMPP::ENQUIRE_LINK_RESP, SMPP::ESME_ROK, $pdu->sequence, "\x00");
+			if($pdu->id==SMPPMPT::ENQUIRE_LINK) {
+				$response = new SmppPduMPT(SMPPMPT::ENQUIRE_LINK_RESP, SMPPMPT::ESME_ROK, $pdu->sequence, "\x00");
 				$this->sendPDU($response);
 			} else if ($pdu->id!=$command_id) { // if this is not the correct PDU add to queue
 				array_push($this->pdu_queue, $pdu);
@@ -268,8 +292,8 @@ class SmppClient
 	 * Concatenated SMS'es uses 16-bit reference numbers, which gives 152 GSM 03.38 chars or 66 UCS-2BE chars per CSMS.
 	 * If we are using 8-bit ref numbers in the UDH for CSMS it's 153 GSM 03.38 chars
 	 * 
-	 * @param SmppAddress $from
-	 * @param SmppAddress $to
+	 * @param SmppAddressMPT $from
+	 * @param SmppAddressMPT $to
 	 * @param string $message
 	 * @param array $tags (optional)
 	 * @param integer $dataCoding (optional)
@@ -278,30 +302,30 @@ class SmppClient
 	 * @param string $validityPeriod (optional)
 	 * @return string message id
 	 */
-	public function sendSMS(SmppAddress $from, SmppAddress $to, $message, $tags=null, $dataCoding=SMPP::DATA_CODING_DEFAULT, $priority=0x00, $scheduleDeliveryTime=null, $validityPeriod=null)
+	public function sendSMS(SmppAddressMPT $from, SmppAddressMPT $to, $message, $tags=null, $dataCoding=SMPPMPT::DATA_CODING_DEFAULT, $priority=0x00, $scheduleDeliveryTime=null, $validityPeriod=null)
 	{
 		$msg_length = strlen($message);
 		
-		if ($msg_length>160 && $dataCoding != SMPP::DATA_CODING_UCS2 && $dataCoding != SMPP::DATA_CODING_DEFAULT) return false;
+		if ($msg_length>160 && $dataCoding != SMPPMPT::DATA_CODING_UCS2 && $dataCoding != SMPPMPT::DATA_CODING_DEFAULT) return false;
 		
 		switch ($dataCoding) {
-			case SMPP::DATA_CODING_UCS2:
+			case SMPPMPT::DATA_CODING_UCS2:
 				$singleSmsOctetLimit = 140; // in octets, 70 UCS-2 chars
 				$csmsSplit = 132; // There are 133 octets available, but this would split the UCS the middle so use 132 instead
 				break;
-			case SMPP::DATA_CODING_DEFAULT:
+			case SMPPMPT::DATA_CODING_DEFAULT:
 				$singleSmsOctetLimit = 160; // we send data in octets, but GSM 03.38 will be packed in septets (7-bit) by SMSC.
-				$csmsSplit = (self::$csms_method == SmppClient::CSMS_8BIT_UDH) ? 153 : 152; // send 152/153 chars in each SMS (SMSC will format data)
+				$csmsSplit = (self::$csms_method == SmppClientMPT::CSMS_8BIT_UDH) ? 153 : 152; // send 152/153 chars in each SMS (SMSC will format data)
 				break;
 			default:
-				$singleSmsOctetLimit = 254; // From SMPP standard
+				$singleSmsOctetLimit = 254; // From SMPPMPT standard
 				break;
 		}
 		
 		// Figure out if we need to do CSMS, since it will affect our PDU
 		if ($msg_length > $singleSmsOctetLimit) {
 			$doCsms = true;
-			if (self::$csms_method != SmppClient::CSMS_PAYLOAD) {
+			if (self::$csms_method != SmppClientMPT::CSMS_PAYLOAD) {
 				$parts = $this->splitMessageString($message, $csmsSplit, $dataCoding);
 				$short_message = reset($parts);
 				$csmsReference = $this->getCsmsReference();
@@ -313,23 +337,23 @@ class SmppClient
 		
 		// Deal with CSMS
 		if ($doCsms) {
-			if (self::$csms_method == SmppClient::CSMS_PAYLOAD) {
-				$payload = new SmppTag(SmppTag::MESSAGE_PAYLOAD, $message, $msg_length);
+			if (self::$csms_method == SmppClientMPT::CSMS_PAYLOAD) {
+				$payload = new SmppTagMPT(SmppTagMPT::MESSAGE_PAYLOAD, $message, $msg_length);
 				return $this->submit_sm($from, $to, null, (empty($tags) ? array($payload) : array_merge($tags,$payload)), $dataCoding, $priority, $scheduleDeliveryTime, $validityPeriod);
-			} else if (self::$csms_method == SmppClient::CSMS_8BIT_UDH) {
+			} else if (self::$csms_method == SmppClientMPT::CSMS_8BIT_UDH) {
 				$seqnum = 1;
 				foreach ($parts as $part) {
 					$udh = pack('cccccc',5,0,3,substr($csmsReference,1,1),count($parts),$seqnum);
-					$res = $this->submit_sm($from, $to, $udh.$part, $tags, $dataCoding, $priority, $scheduleDeliveryTime, $validityPeriod, (SmppClient::$sms_esm_class|0x40));
+					$res = $this->submit_sm($from, $to, $udh.$part, $tags, $dataCoding, $priority, $scheduleDeliveryTime, $validityPeriod, (SmppClientMPT::$sms_esm_class|0x40));
 					$seqnum++;
 				}
 				return $res;
 			} else {
-				$sar_msg_ref_num = new SmppTag(SmppTag::SAR_MSG_REF_NUM, $csmsReference, 2, 'n');
-				$sar_total_segments = new SmppTag(SmppTag::SAR_TOTAL_SEGMENTS, count($parts), 1, 'c');
+				$sar_msg_ref_num = new SmppTagMPT(SmppTagMPT::SAR_MSG_REF_NUM, $csmsReference, 2, 'n');
+				$sar_total_segments = new SmppTagMPT(SmppTagMPT::SAR_TOTAL_SEGMENTS, count($parts), 1, 'c');
 				$seqnum = 1;
 				foreach ($parts as $part) {
-					$sartags = array($sar_msg_ref_num, $sar_total_segments, new SmppTag(SmppTag::SAR_SEGMENT_SEQNUM, $seqnum, 1, 'c'));
+					$sartags = array($sar_msg_ref_num, $sar_total_segments, new SmppTagMPT(SmppTagMPT::SAR_SEGMENT_SEQNUM, $seqnum, 1, 'c'));
 					$res = $this->submit_sm($from, $to, $part, (empty($tags) ? $sartags : array_merge($tags,$sartags)), $dataCoding, $priority, $scheduleDeliveryTime, $validityPeriod);
 					$seqnum++;
 				}
@@ -345,8 +369,8 @@ class SmppClient
 	 * Implemented as a protected method to allow automatic sms concatenation.
 	 * Tags must be an array of already packed and encoded TLV-params.
 	 * 
-	 * @param SmppAddress $source
-	 * @param SmppAddress $destination
+	 * @param SmppAddressMPT $source
+	 * @param SmppAddressMPT $destination
 	 * @param string $short_message
 	 * @param array $tags
 	 * @param integer $dataCoding
@@ -356,7 +380,7 @@ class SmppClient
 	 * @param string $esmClass
 	 * @return string message id
 	 */
-	protected function submit_sm(SmppAddress $source, SmppAddress $destination, $short_message=null, $tags=null, $dataCoding=SMPP::DATA_CODING_DEFAULT, $priority=0x00, $scheduleDeliveryTime=null, $validityPeriod=null, $esmClass=null)
+	protected function submit_sm(SmppAddressMPT $source, SmppAddressMPT $destination, $short_message=null, $tags=null, $dataCoding=SMPPMPT::DATA_CODING_DEFAULT, $priority=0x00, $scheduleDeliveryTime=null, $validityPeriod=null, $esmClass=null)
 	{
 		if (is_null($esmClass)) $esmClass = self::$sms_esm_class;
 		
@@ -389,7 +413,7 @@ class SmppClient
 			}
 		}
 		
-		$response=$this->sendCommand(SMPP::SUBMIT_SM,$pdu);
+		$response=$this->sendCommand(SMPPMPT::SUBMIT_SM,$pdu);
 		$body = unpack("a*msgid",$response->body);
 		return $body['msgid'];
 	}
@@ -400,7 +424,7 @@ class SmppClient
 	 */
 	protected function getCsmsReference()
 	{
-		$limit = (SmppClient::$csms_method == SmppClient::CSMS_8BIT_UDH) ? 255 : 65535;
+		$limit = (SmppClientMPT::$csms_method == SmppClientMPT::CSMS_8BIT_UDH) ? 255 : 65535;
 		if (!isset($this->sar_msg_ref_num)) $this->sar_msg_ref_num = mt_rand(0,$limit);
 		$this->sar_msg_ref_num++;
 		if ($this->sar_msg_ref_num>$limit) $this->sar_msg_ref_num = 0;
@@ -417,10 +441,10 @@ class SmppClient
 	 * @param integer $split
 	 * @param integer $dataCoding (optional)
 	 */
-	protected function splitMessageString($message, $split, $dataCoding=SMPP::DATA_CODING_DEFAULT)
+	protected function splitMessageString($message, $split, $dataCoding=SMPPMPT::DATA_CODING_DEFAULT)
 	{
 		switch ($dataCoding) {
-			case SMPP::DATA_CODING_DEFAULT:
+			case SMPPMPT::DATA_CODING_DEFAULT:
 				$msg_length = strlen($message);
 				// Do we need to do php based split?
 				$numParts = floor($msg_length / $split);
@@ -451,7 +475,7 @@ class SmppClient
 				}
 				$parts[] = $part;
 				return $parts;
-			case SMPP::DATA_CODING_UCS2: // UCS2-BE can just use str_split since we send 132 octets per message, which gives a fine split using UCS2
+			case SMPPMPT::DATA_CODING_UCS2: // UCS2-BE can just use str_split since we send 132 octets per message, which gives a fine split using UCS2
 			default:
 				return str_split($message,$split);
 		}
@@ -461,7 +485,7 @@ class SmppClient
 	 * Binds the socket and opens the session on SMSC
 	 * @param string $login - ESME system_id
 	 * @param string $port - ESME password
-	 * @return SmppPdu
+	 * @return SmppPduMPT
 	 */
 	protected function _bind($login, $pass, $command_id)
 	{
@@ -477,20 +501,20 @@ class SmppClient
 		);
 		
 		$response=$this->sendCommand($command_id,$pduBody);
-		if ($response->status != SMPP::ESME_ROK) throw new SmppException(SMPP::getStatusMessage($response->status), $response->status);
+		if ($response->status != SMPPMPT::ESME_ROK) throw new SmppExceptionMPT(SMPPMPT::getStatusMessage($response->status), $response->status);
 		
 		return $response;
 	}
 
 	/**
 	 * Parse received PDU from SMSC.
-	 * @param SmppPdu $pdu - received PDU from SMSC.
+	 * @param SmppPduMPT $pdu - received PDU from SMSC.
 	 * @return parsed PDU as array.
 	 */
-	protected function parseSMS(SmppPdu $pdu)
+	protected function parseSMS(SmppPduMPT $pdu)
 	{
 		// Check command id
-		if($pdu->id != SMPP::DELIVER_SM) throw new InvalidArgumentException('PDU is not an received SMS');
+		if($pdu->id != SMPPMPT::DELIVER_SM) throw new InvalidArgumentException('PDU is not an received SMS');
 
 		// Unpack PDU
 		$ar=unpack("C*",$pdu->body);
@@ -501,12 +525,12 @@ class SmppClient
 		$source_addr_ton = next($ar);
 		$source_addr_npi = next($ar);
 		$source_addr = $this->getString($ar,21);
-		$source = new SmppAddress($source_addr,$source_addr_ton,$source_addr_npi);
+		$source = new SmppAddressMPT($source_addr,$source_addr_ton,$source_addr_npi);
 		
 		$dest_addr_ton = next($ar);
 		$dest_addr_npi = next($ar);
 		$destination_addr = $this->getString($ar,21);
-		$destination = new SmppAddress($destination_addr,$dest_addr_ton,$dest_addr_npi);
+		$destination = new SmppAddressMPT($destination_addr,$dest_addr_ton,$dest_addr_npi);
 		
 		$esmClass = next($ar);
 		$protocolId = next($ar);
@@ -531,28 +555,28 @@ class SmppClient
 			$tags = null;
 		}
 		
-		if (($esmClass & SMPP::ESM_DELIVER_SMSC_RECEIPT) != 0) {
-			$sms = new SmppDeliveryReceipt($pdu->id, $pdu->status, $pdu->sequence, $pdu->body, $service_type, $source, $destination, $esmClass, $protocolId, $priorityFlag, $registeredDelivery, $dataCoding, $message, $tags);
+		if (($esmClass & SMPPMPT::ESM_DELIVER_SMSC_RECEIPT) != 0) {
+			$sms = new SmppDeliveryReceiptMPT($pdu->id, $pdu->status, $pdu->sequence, $pdu->body, $service_type, $source, $destination, $esmClass, $protocolId, $priorityFlag, $registeredDelivery, $dataCoding, $message, $tags);
 			$sms->parseDeliveryReceipt();
 		} else {
-			$sms = new SmppSms($pdu->id, $pdu->status, $pdu->sequence, $pdu->body, $service_type, $source, $destination, $esmClass, $protocolId, $priorityFlag, $registeredDelivery, $dataCoding, $message, $tags);
+			$sms = new SmppSmsMPT($pdu->id, $pdu->status, $pdu->sequence, $pdu->body, $service_type, $source, $destination, $esmClass, $protocolId, $priorityFlag, $registeredDelivery, $dataCoding, $message, $tags);
 		}
 		
 		if($this->debug) call_user_func($this->debugHandler, "Received sms:\n".print_r($sms,true));
 		
 		// Send response of recieving sms
-		$response = new SmppPdu(SMPP::DELIVER_SM_RESP, SMPP::ESME_ROK, $pdu->sequence, "\x00");
+		$response = new SmppPduMPT(SMPPMPT::DELIVER_SM_RESP, SMPPMPT::ESME_ROK, $pdu->sequence, "\x00");
 		$this->sendPDU($response);
 		return $sms;
 	}
 	
 	/**
 	 * Send the enquire link command.
-	 * @return SmppPdu
+	 * @return SmppPduMPT
 	 */
 	public function enquireLink()
 	{
-		$response = $this->sendCommand(SMPP::ENQUIRE_LINK, null);
+		$response = $this->sendCommand(SMPPMPT::ENQUIRE_LINK, null);
 		return $response;
 	}
 	
@@ -569,18 +593,18 @@ class SmppClient
 		$ql = count($this->pdu_queue);
 		for($i=0;$i<$ql;$i++) {
 			$pdu=$this->pdu_queue[$i];
-			if($pdu->id==SMPP::ENQUIRE_LINK) {
+			if($pdu->id==SMPPMPT::ENQUIRE_LINK) {
 				//remove response
 				array_splice($this->pdu_queue, $i, 1);
-				$this->sendPDU(new SmppPdu(SMPP::ENQUIRE_LINK_RESP, SMPP::ESME_ROK, $pdu->sequence, "\x00"));
+				$this->sendPDU(new SmppPduMPT(SMPPMPT::ENQUIRE_LINK_RESP, SMPPMPT::ESME_ROK, $pdu->sequence, "\x00"));
 			}
 		}
 		
 		// Check the transport for data
 		if ($this->transport->hasData()) {
 			$pdu = $this->readPDU();
-			if($pdu->id==SMPP::ENQUIRE_LINK) {
-				$this->sendPDU(new SmppPdu(SMPP::ENQUIRE_LINK_RESP, SMPP::ESME_ROK, $pdu->sequence, "\x00"));
+			if($pdu->id==SMPPMPT::ENQUIRE_LINK) {
+				$this->sendPDU(new SmppPduMPT(SMPPMPT::ENQUIRE_LINK_RESP, SMPPMPT::ESME_ROK, $pdu->sequence, "\x00"));
 			} else if ($pdu) {
 				array_push($this->pdu_queue, $pdu);
 			}
@@ -609,17 +633,17 @@ class SmppClient
 	 * Sends the PDU command to the SMSC and waits for response.
 	 * @param integer $id - command ID
 	 * @param string $pduBody - PDU body
-	 * @return SmppPdu
+	 * @return SmppPduMPT
 	 */
 	protected function sendCommand($id, $pduBody)
 	{
 		if (!$this->transport->isOpen()) return false;
-		$pdu = new SmppPdu($id, 0, $this->sequence_number, $pduBody);
+		$pdu = new SmppPduMPT($id, 0, $this->sequence_number, $pduBody);
 		$this->sendPDU($pdu);
 		$response=$this->readPDU_resp($this->sequence_number, $pdu->id);
-		if ($response === false) throw new SmppException('Failed to read reply to command: 0x'.dechex($id));
+		if ($response === false) throw new SmppExceptionMPT('Failed to read reply to command: 0x'.dechex($id));
 		
-		if ($response->status != SMPP::ESME_ROK) throw new SmppException(SMPP::getStatusMessage($response->status), $response->status);
+		if ($response->status != SMPPMPT::ESME_ROK) throw new SmppExceptionMPT(SMPPMPT::getStatusMessage($response->status), $response->status);
 		
 		$this->sequence_number++;
 		
@@ -633,9 +657,9 @@ class SmppClient
 	
 	/**
 	 * Prepares and sends PDU to SMSC.
-	 * @param SmppPdu $pdu
+	 * @param SmppPduMPT $pdu
 	 */
-	protected function sendPDU(SmppPdu $pdu)
+	protected function sendPDU(SmppPduMPT $pdu)
 	{
 		$length=strlen($pdu->body) + 16;
 		$header=pack("NNNN", $length, $pdu->id, $pdu->status, $pdu->sequence);
@@ -651,25 +675,25 @@ class SmppClient
 	/**
 	 * Waits for SMSC response on specific PDU.
 	 * If a GENERIC_NACK with a matching sequence number, or null sequence is received instead it's also accepted.
-	 * Some SMPP servers, ie. logica returns GENERIC_NACK on errors.
+	 * Some SMPPMPT servers, ie. logica returns GENERIC_NACK on errors.
 	 * 
 	 * @param integer $seq_number - PDU sequence number
 	 * @param integer $command_id - PDU command ID
-	 * @return SmppPdu
-	 * @throws SmppException
+	 * @return SmppPduMPT
+	 * @throws SmppExceptionMPT
 	 */
 	protected function readPDU_resp($seq_number, $command_id)
 	{
 		// Get response cmd id from command id
-		$command_id=$command_id|SMPP::GENERIC_NACK;
+		$command_id=$command_id|SMPPMPT::GENERIC_NACK;
 		
 		// Check the queue first
 		$ql = count($this->pdu_queue);
 		for($i=0;$i<$ql;$i++) {
 			$pdu=$this->pdu_queue[$i];
 			if (
-				($pdu->sequence == $seq_number && ($pdu->id == $command_id || $pdu->id == SMPP::GENERIC_NACK)) || 
-				($pdu->sequence == null && $pdu->id == SMPP::GENERIC_NACK)
+				($pdu->sequence == $seq_number && ($pdu->id == $command_id || $pdu->id == SMPPMPT::GENERIC_NACK)) || 
+				($pdu->sequence == null && $pdu->id == SMPPMPT::GENERIC_NACK)
 			) {
 				// remove response pdu from queue
 				array_splice($this->pdu_queue, $i, 1);
@@ -681,8 +705,8 @@ class SmppClient
 		do{
 			$pdu=$this->readPDU();
 			if ($pdu) {
-				if ($pdu->sequence == $seq_number && ($pdu->id == $command_id || $pdu->id == SMPP::GENERIC_NACK)) return $pdu;
-				if ($pdu->sequence == null && $pdu->id == SMPP::GENERIC_NACK) return $pdu;
+				if ($pdu->sequence == $seq_number && ($pdu->id == $command_id || $pdu->id == SMPPMPT::GENERIC_NACK)) return $pdu;
+				if ($pdu->sequence == null && $pdu->id == SMPPMPT::GENERIC_NACK) return $pdu;
 				array_push($this->pdu_queue, $pdu); // unknown PDU push to queue
 			}
 		} while($pdu);
@@ -691,7 +715,7 @@ class SmppClient
 	
 	/**
 	 * Reads incoming PDU from SMSC.
-	 * @return SmppPdu
+	 * @return SmppPduMPT
 	 */
 	protected function readPDU()
 	{
@@ -717,10 +741,10 @@ class SmppClient
 			call_user_func($this->debugHandler, "Read PDU         : $length bytes");
 			call_user_func($this->debugHandler, ' '.chunk_split(bin2hex($bufLength.$bufHeaders.$body),2," "));
 			call_user_func($this->debugHandler, " command id      : 0x".dechex($command_id));
-			call_user_func($this->debugHandler, " command status  : 0x".dechex($command_status)." ".SMPP::getStatusMessage($command_status));
+			call_user_func($this->debugHandler, " command status  : 0x".dechex($command_status)." ".SMPPMPT::getStatusMessage($command_status));
 			call_user_func($this->debugHandler, ' sequence number : '.$sequence_number);
 		}
-		return new SmppPdu($command_id, $command_status, $sequence_number, $body);
+		return new SmppPduMPT($command_id, $command_status, $sequence_number, $body);
 	}
 	
 	/**
@@ -774,7 +798,7 @@ class SmppClient
 		}
 		
 		$value = $this->getOctets($ar,$length);
-		$tag = new SmppTag($id, $value, $length);
+		$tag = new SmppTagMPT($id, $value, $length);
 		if ($this->debug) {
 			call_user_func($this->debugHandler, "Parsed tag:");
 			call_user_func($this->debugHandler, " id     :0x".dechex($tag->id));
@@ -786,20 +810,20 @@ class SmppClient
 	
 }
 
-class SmppException extends RuntimeException
+class SmppExceptionMPT extends RuntimeException
 {
 	
 }
 
 
 /**
- * Numerous constants for SMPP v3.4
- * Based on specification at: http://www.smsforum.net/SMPP_v3_4_Issue1_2.zip
+ * Numerous constants for SMPPMPT v3.4
+ * Based on specification at: http://www.smsforum.net/SMPPMPT_v3_4_Issue1_2.zip
  */ 
 
-class SMPP
+class SMPPMPT
 {
-	// Command ids - SMPP v3.4 - 5.1.2.1 page 110-111
+	// Command ids - SMPPMPT v3.4 - 5.1.2.1 page 110-111
 	const GENERIC_NACK = 0x80000000;
 	const BIND_RECEIVER = 0x00000001;
 	const BIND_RECEIVER_RESP = 0x80000001;
@@ -823,7 +847,7 @@ class SMPP
 	const ENQUIRE_LINK = 0x00000015;
 	const ENQUIRE_LINK_RESP = 0x80000015;
 	
-	//  Command status - SMPP v3.4 - 5.1.3 page 112-114
+	//  Command status - SMPPMPT v3.4 - 5.1.3 page 112-114
 	const ESME_ROK = 0x00000000; // No Error
 	const ESME_RINVMSGLEN = 0x00000001; // Message Length is invalid
 	const ESME_RINVCMDLEN = 0x00000002; // Command Length is invalid
@@ -873,7 +897,7 @@ class SMPP
 	const ESME_RDELIVERYFAILURE = 0x000000FE; // Delivery Failure (data_sm_resp)
 	const ESME_RUNKNOWNERR = 0x000000FF; // Unknown Error
 	
-	// SMPP v3.4 - 5.2.5 page 117	
+	// SMPPMPT v3.4 - 5.2.5 page 117	
 	const TON_UNKNOWN = 0x00;
 	const TON_INTERNATIONAL = 0x01;
 	const TON_NATIONAL = 0x02;
@@ -882,7 +906,7 @@ class SMPP
 	const TON_ALPHANUMERIC = 0x05;
 	const TON_ABBREVIATED = 0x06;
 	
-	// SMPP v3.4 - 5.2.6 page 118
+	// SMPPMPT v3.4 - 5.2.6 page 118
 	const NPI_UNKNOWN = 0x00;
 	const NPI_E164 = 0x01;
 	const NPI_DATA = 0x03;
@@ -894,7 +918,7 @@ class SMPP
 	const NPI_INTERNET = 0x0e;
 	const NPI_WAPCLIENT = 0x12;
 	
-	// ESM bits 1-0 - SMPP v3.4 - 5.2.12 page 121-122
+	// ESM bits 1-0 - SMPPMPT v3.4 - 5.2.12 page 121-122
 	const ESM_SUBMIT_MODE_DATAGRAM = 0x01;
 	const ESM_SUBMIT_MODE_FORWARD = 0x02;
 	const ESM_SUBMIT_MODE_STOREANDFORWARD = 0x03;
@@ -911,7 +935,7 @@ class SMPP
 	const ESM_UHDI = 0x40;
 	const ESM_REPLYPATH = 0x80;
 	
-	// SMPP v3.4 - 5.2.17 page 124
+	// SMPPMPT v3.4 - 5.2.17 page 124
 	const REG_DELIVERY_NO = 0x00;
 	const REG_DELIVERY_SMSC_BOTH = 0x01; // both success and failure
 	const REG_DELIVERY_SMSC_FAILED = 0x02;
@@ -920,11 +944,11 @@ class SMPP
 	const REG_DELIVERY_SME_BOTH = 0x10;
 	const REG_DELIVERY_IDN = 0x16; // Intermediate notification
 	
-	// SMPP v3.4 - 5.2.18 page 125
+	// SMPPMPT v3.4 - 5.2.18 page 125
 	const REPLACE_NO = 0x00;
 	const REPLACE_YES = 0x01;
 	
-	// SMPP v3.4 - 5.2.19 page 126
+	// SMPPMPT v3.4 - 5.2.19 page 126
 	const DATA_CODING_DEFAULT = 0;
 	const DATA_CODING_IA5 = 1; // IA5 (CCITT T.50)/ASCII (ANSI X3.4)
 	const DATA_CODING_BINARY_ALIAS = 2;
@@ -939,11 +963,11 @@ class SMPP
 	const DATA_CODING_KANJI = 13; // Extended Kanji JIS
 	const DATA_CODING_KSC5601 = 14;
 		
-	// SMPP v3.4 - 5.2.25 page 129
+	// SMPPMPT v3.4 - 5.2.25 page 129
 	const DEST_FLAG_SME = 1;
 	const DEST_FLAG_DISTLIST = 2;
 	
-	// SMPP v3.4 - 5.2.28 page 130
+	// SMPPMPT v3.4 - 5.2.28 page 130
 	const STATE_ENROUTE = 1;
 	const STATE_DELIVERED = 2;
 	const STATE_EXPIRED = 3;
@@ -957,54 +981,54 @@ class SMPP
 	public static function getStatusMessage($statuscode)
 	{
 		switch ($statuscode) {
-			case SMPP::ESME_ROK: return 'No Error';
-			case SMPP::ESME_RINVMSGLEN: return 'Message Length is invalid';
-			case SMPP::ESME_RINVCMDLEN: return 'Command Length is invalid';
-			case SMPP::ESME_RINVCMDID: return 'Invalid Command ID';
-			case SMPP::ESME_RINVBNDSTS: return 'Incorrect BIND Status for given command';
-			case SMPP::ESME_RALYBND: return 'ESME Already in Bound State';
-			case SMPP::ESME_RINVPRTFLG: return 'Invalid Priority Flag';
-			case SMPP::ESME_RINVREGDLVFLG: return 'Invalid Registered Delivery Flag';
-			case SMPP::ESME_RSYSERR: return 'System Error';
-			case SMPP::ESME_RINVSRCADR: return 'Invalid Source Address';
-			case SMPP::ESME_RINVDSTADR: return 'Invalid Dest Addr';
-			case SMPP::ESME_RINVMSGID: return 'Message ID is invalid';
-			case SMPP::ESME_RBINDFAIL: return 'Bind Failed';
-			case SMPP::ESME_RINVPASWD: return 'Invalid Password';
-			case SMPP::ESME_RINVSYSID: return 'Invalid System ID';
-			case SMPP::ESME_RCANCELFAIL: return 'Cancel SM Failed';
-			case SMPP::ESME_RREPLACEFAIL: return 'Replace SM Failed';
-			case SMPP::ESME_RMSGQFUL: return 'Message Queue Full';
-			case SMPP::ESME_RINVSERTYP: return 'Invalid Service Type';
-			case SMPP::ESME_RINVNUMDESTS: return 'Invalid number of destinations';
-			case SMPP::ESME_RINVDLNAME: return 'Invalid Distribution List name';
-			case SMPP::ESME_RINVDESTFLAG: return 'Destination flag (submit_multi)';
-			case SMPP::ESME_RINVSUBREP: return 'Invalid ‘submit with replace’ request (i.e. submit_sm with replace_if_present_flag set)';
-			case SMPP::ESME_RINVESMSUBMIT: return 'Invalid esm_SUBMIT field data';
-			case SMPP::ESME_RCNTSUBDL: return 'Cannot Submit to Distribution List';
-			case SMPP::ESME_RSUBMITFAIL: return 'submit_sm or submit_multi failed';
-			case SMPP::ESME_RINVSRCTON: return 'Invalid Source address TON';
-			case SMPP::ESME_RINVSRCNPI: return 'Invalid Source address NPI';
-			case SMPP::ESME_RINVDSTTON: return 'Invalid Destination address TON';
-			case SMPP::ESME_RINVDSTNPI: return 'Invalid Destination address NPI';
-			case SMPP::ESME_RINVSYSTYP: return 'Invalid system_type field';
-			case SMPP::ESME_RINVREPFLAG: return 'Invalid replace_if_present flag';
-			case SMPP::ESME_RINVNUMMSGS: return 'Invalid number of messages';
-			case SMPP::ESME_RTHROTTLED: return 'Throttling error (ESME has exceeded allowed message limits)';
-			case SMPP::ESME_RINVSCHED: return 'Invalid Scheduled Delivery Time';
-			case SMPP::ESME_RINVEXPIRY: return 'Invalid message (Expiry time)';
-			case SMPP::ESME_RINVDFTMSGID: return 'Predefined Message Invalid or Not Found';
-			case SMPP::ESME_RX_T_APPN: return 'ESME Receiver Temporary App Error Code';
-			case SMPP::ESME_RX_P_APPN: return 'ESME Receiver Permanent App Error Code';
-			case SMPP::ESME_RX_R_APPN: return 'ESME Receiver Reject Message Error Code';
-			case SMPP::ESME_RQUERYFAIL: return 'query_sm request failed';
-			case SMPP::ESME_RINVOPTPARSTREAM: return 'Error in the optional part of the PDU Body.';
-			case SMPP::ESME_ROPTPARNOTALLWD: return 'Optional Parameter not allowed';
-			case SMPP::ESME_RINVPARLEN: return 'Invalid Parameter Length.';
-			case SMPP::ESME_RMISSINGOPTPARAM: return 'Expected Optional Parameter missing';
-			case SMPP::ESME_RINVOPTPARAMVAL: return 'Invalid Optional Parameter Value';
-			case SMPP::ESME_RDELIVERYFAILURE: return 'Delivery Failure (data_sm_resp)';
-			case SMPP::ESME_RUNKNOWNERR: return 'Unknown Error';
+			case SMPPMPT::ESME_ROK: return 'No Error';
+			case SMPPMPT::ESME_RINVMSGLEN: return 'Message Length is invalid';
+			case SMPPMPT::ESME_RINVCMDLEN: return 'Command Length is invalid';
+			case SMPPMPT::ESME_RINVCMDID: return 'Invalid Command ID';
+			case SMPPMPT::ESME_RINVBNDSTS: return 'Incorrect BIND Status for given command';
+			case SMPPMPT::ESME_RALYBND: return 'ESME Already in Bound State';
+			case SMPPMPT::ESME_RINVPRTFLG: return 'Invalid Priority Flag';
+			case SMPPMPT::ESME_RINVREGDLVFLG: return 'Invalid Registered Delivery Flag';
+			case SMPPMPT::ESME_RSYSERR: return 'System Error';
+			case SMPPMPT::ESME_RINVSRCADR: return 'Invalid Source Address';
+			case SMPPMPT::ESME_RINVDSTADR: return 'Invalid Dest Addr';
+			case SMPPMPT::ESME_RINVMSGID: return 'Message ID is invalid';
+			case SMPPMPT::ESME_RBINDFAIL: return 'Bind Failed';
+			case SMPPMPT::ESME_RINVPASWD: return 'Invalid Password';
+			case SMPPMPT::ESME_RINVSYSID: return 'Invalid System ID';
+			case SMPPMPT::ESME_RCANCELFAIL: return 'Cancel SM Failed';
+			case SMPPMPT::ESME_RREPLACEFAIL: return 'Replace SM Failed';
+			case SMPPMPT::ESME_RMSGQFUL: return 'Message Queue Full';
+			case SMPPMPT::ESME_RINVSERTYP: return 'Invalid Service Type';
+			case SMPPMPT::ESME_RINVNUMDESTS: return 'Invalid number of destinations';
+			case SMPPMPT::ESME_RINVDLNAME: return 'Invalid Distribution List name';
+			case SMPPMPT::ESME_RINVDESTFLAG: return 'Destination flag (submit_multi)';
+			case SMPPMPT::ESME_RINVSUBREP: return 'Invalid ‘submit with replace’ request (i.e. submit_sm with replace_if_present_flag set)';
+			case SMPPMPT::ESME_RINVESMSUBMIT: return 'Invalid esm_SUBMIT field data';
+			case SMPPMPT::ESME_RCNTSUBDL: return 'Cannot Submit to Distribution List';
+			case SMPPMPT::ESME_RSUBMITFAIL: return 'submit_sm or submit_multi failed';
+			case SMPPMPT::ESME_RINVSRCTON: return 'Invalid Source address TON';
+			case SMPPMPT::ESME_RINVSRCNPI: return 'Invalid Source address NPI';
+			case SMPPMPT::ESME_RINVDSTTON: return 'Invalid Destination address TON';
+			case SMPPMPT::ESME_RINVDSTNPI: return 'Invalid Destination address NPI';
+			case SMPPMPT::ESME_RINVSYSTYP: return 'Invalid system_type field';
+			case SMPPMPT::ESME_RINVREPFLAG: return 'Invalid replace_if_present flag';
+			case SMPPMPT::ESME_RINVNUMMSGS: return 'Invalid number of messages';
+			case SMPPMPT::ESME_RTHROTTLED: return 'Throttling error (ESME has exceeded allowed message limits)';
+			case SMPPMPT::ESME_RINVSCHED: return 'Invalid Scheduled Delivery Time';
+			case SMPPMPT::ESME_RINVEXPIRY: return 'Invalid message (Expiry time)';
+			case SMPPMPT::ESME_RINVDFTMSGID: return 'Predefined Message Invalid or Not Found';
+			case SMPPMPT::ESME_RX_T_APPN: return 'ESME Receiver Temporary App Error Code';
+			case SMPPMPT::ESME_RX_P_APPN: return 'ESME Receiver Permanent App Error Code';
+			case SMPPMPT::ESME_RX_R_APPN: return 'ESME Receiver Reject Message Error Code';
+			case SMPPMPT::ESME_RQUERYFAIL: return 'query_sm request failed';
+			case SMPPMPT::ESME_RINVOPTPARSTREAM: return 'Error in the optional part of the PDU Body.';
+			case SMPPMPT::ESME_ROPTPARNOTALLWD: return 'Optional Parameter not allowed';
+			case SMPPMPT::ESME_RINVPARLEN: return 'Invalid Parameter Length.';
+			case SMPPMPT::ESME_RMISSINGOPTPARAM: return 'Expected Optional Parameter missing';
+			case SMPPMPT::ESME_RINVOPTPARAMVAL: return 'Invalid Optional Parameter Value';
+			case SMPPMPT::ESME_RDELIVERYFAILURE: return 'Delivery Failure (data_sm_resp)';
+			case SMPPMPT::ESME_RUNKNOWNERR: return 'Unknown Error';
 			default:
 				return 'Unknown statuscode: '.dechex($statuscode);
 		}
@@ -1015,7 +1039,7 @@ class SMPP
  * Primitive class for encapsulating PDUs
  * @author hd@onlinecity.dk
  */
-class SmppPdu
+class SmppPduMPT
 {
 	public $id;
 	public $status;
@@ -1043,7 +1067,7 @@ class SmppPdu
  * An extension of a SMS, with data embedded into the message part of the SMS.
  * @author hd@onlinecity.dk
  */
-class SmppDeliveryReceipt extends SmppSms
+class SmppDeliveryReceiptMPT extends SmppSmsMPT
 {
 	public $id;
 	public $sub;
@@ -1055,7 +1079,7 @@ class SmppDeliveryReceipt extends SmppSms
 	public $text;
 	
 	/**
-	 * Parse a delivery receipt formatted as specified in SMPP v3.4 - Appendix B
+	 * Parse a delivery receipt formatted as specified in SMPPMPT v3.4 - Appendix B
 	 * It accepts all chars except space as the message id
 	 * 
 	 * @throws InvalidArgumentException
@@ -1080,7 +1104,7 @@ class SmppDeliveryReceipt extends SmppSms
  * Primitive type to represent SMSes
  * @author hd@onlinecity.dk
  */
-class SmppSms extends SmppPdu
+class SmppSmsMPT extends SmppPduMPT
 {
 	public $service_type;
 	public $source;
@@ -1121,7 +1145,7 @@ class SmppSms extends SmppPdu
 	 * @param integer $smDefaultMsgId (optional)
 	 * @param integer $replaceIfPresentFlag (optional)
 	 */
-	public function __construct($id, $status, $sequence, $body, $service_type, SmppAddress $source, SmppAddress $destination, 
+	public function __construct($id, $status, $sequence, $body, $service_type, SmppAddressMPT $source, SmppAddressMPT $destination, 
 		$esmClass, $protocolId, $priorityFlag, $registeredDelivery, $dataCoding, $message, $tags, 
 		$scheduleDeliveryTime=null, $validityPeriod=null, $smDefaultMsgId=null, $replaceIfPresentFlag=null)
 	{
@@ -1148,7 +1172,7 @@ class SmppSms extends SmppPdu
  * Primitive class for encapsulating smpp addresses
  * @author hd@onlinecity.dk
  */
-class SmppAddress
+class SmppAddressMPT
 {
 	public $ton; // type-of-number
 	public $npi; // numbering-plan-indicator
@@ -1162,11 +1186,11 @@ class SmppAddress
 	 * @param integer $npi
 	 * @throws InvalidArgumentException
 	 */
-	public function __construct($value,$ton=SMPP::TON_UNKNOWN,$npi=SMPP::NPI_UNKNOWN)
+	public function __construct($value,$ton=SMPPMPT::TON_UNKNOWN,$npi=SMPPMPT::NPI_UNKNOWN)
 	{
 		// Address-Value field may contain 10 octets (12-length-type), see 3GPP TS 23.040 v 9.3.0 - section 9.1.2.5 page 46.
-		if ($ton == SMPP::TON_ALPHANUMERIC && strlen($value) > 11) throw new InvalidArgumentException('Alphanumeric address may only contain 11 chars');
-		if ($ton == SMPP::TON_INTERNATIONAL && $npi == SMPP::NPI_E164 && strlen($value) > 15) throw new InvalidArgumentException('E164 address may only contain 15 digits');
+		if ($ton == SMPPMPT::TON_ALPHANUMERIC && strlen($value) > 11) throw new InvalidArgumentException('Alphanumeric address may only contain 11 chars');
+		if ($ton == SMPPMPT::TON_INTERNATIONAL && $npi == SMPPMPT::NPI_E164 && strlen($value) > 15) throw new InvalidArgumentException('E164 address may only contain 15 digits');
 		
 		$this->value = (string) $value;
 		$this->ton = $ton;
@@ -1175,10 +1199,10 @@ class SmppAddress
 }
 
 /**
- * Primitive class to represent SMPP optional params, also know as TLV (Tag-Length-Value) params
+ * Primitive class to represent SMPPMPT optional params, also know as TLV (Tag-Length-Value) params
  * @author hd@onlinecity.dk
  */
-class SmppTag
+class SmppTagMPT
 {
 	public $id;
 	public $length;

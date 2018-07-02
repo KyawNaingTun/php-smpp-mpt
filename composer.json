@@ -1,15 +1,15 @@
 {
-  "name": "php-smpp/php-smpp",
-  "description": "PHP-based SMPP client lib",
-  "keywords": ["smpp", "sms", "texting", "gsm"],
-  "homepage": "http://github.com/onlinecity/php-smpp",
+  "name": "php-smpp/php-smpp-for-mpt",
+  "description": "PHP-based SMPP client lib for MPT",
+  "keywords": ["smpp", "sms", "texting", "gsm", "MPT", "Myanmar"],
+  "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt",
   "type": "library",
   "license": "LGPL",
   "authors": [
     {
-      "name": "Hans Duedal",
-      "email": "hd@oc.dk",
-      "homepage": "http://oc.dk"
+      "name": "Kyaw Naing Tun",
+      "email": "kyawnainghtun93@gmail.com",
+      "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt"
     }
   ],
   "require": {
@@ -21,9 +21,9 @@
   },
   "autoload": {
     "files": [
-      "gsmencoder.class.php",
-      "sockettransport.class.php",
-      "smppclient.class.php"
+      "gsmencodermpt.class.php",
+      "sockettransportmpt.class.php",
+      "smppclientmpt.class.php"
     ]
   }
 }
