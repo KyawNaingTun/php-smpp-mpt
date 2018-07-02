@@ -1,15 +1,15 @@
 {
-  "name": "kyawnaingtun/php-smpp-for-mpt",
+  "name": "kyawnaingtun/php-smpp-mpt",
   "description": "PHP-based SMPP client lib for MPT",
   "keywords": ["smpp", "sms", "texting", "gsm", "MPT", "Myanmar"],
-  "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt",
+  "homepage": "https://github.com/KyawNaingTun/php-smpp-mpt",
   "type": "library",
   "license": "MIT",
   "authors": [
     {
       "name": "Kyaw Naing Tun",
       "email": "kyawnainghtun93@gmail.com",
-      "homepage": "https://github.com/KyawNaingTun/php-smpp-for-mpt"
+      "homepage": "https://github.com/KyawNaingTun/php-smpp-mpt"
     }
   ],
   "require": {
